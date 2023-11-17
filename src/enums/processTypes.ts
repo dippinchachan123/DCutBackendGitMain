@@ -1,0 +1,17 @@
+export enum PRE_PROCESS_TYPES {
+    MARKING_LOTING = "MARKING_LOTING",
+    LASER_LOTING = "LASER_LOTING",
+    BOIL_LOTING = "BOIL_LOTING",
+    GHAT_LOTING = "GHAT_LOTING",
+    SHAPE_LOTING = "SHAPE_LOTING",
+    POLISH_LOTING = "POLISH_LOTING",
+    POLISH_TABLE_LOTING = "POLISH_TABLE_LOTING"
+}
+
+export enum POST_PROCESS_TYPES {
+    NATS_PROCESS = "Nats process",
+    LAL_ACID_PROCESS = "Lal acid process",
+    LUSTER_PROCESS = "Luster process",
+    PROPONEL_PROCESS = "Proponel process",
+    FILLING_PROCESS = "Filling process"
+}
