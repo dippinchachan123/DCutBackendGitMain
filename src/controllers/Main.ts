@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto"
 import kapanModel from "../DBModels/Kapan"
 import StaffModel from "../DBModels/Staff"
-
 import express from 'express';
 import { DATA_FEATCHED, DATA_NOT_FOUND, DATA_NOT_SAVED, DATA_REMOVED_SUCCESSFULLY, DATA_SAVED, DATA_UPDATED, ERROR_WHILE_FEATCHING_DATA } from "../utils/constants/global.constants";
 import { PROCESS_IDS } from "../Data/Processes";
@@ -42,6 +41,20 @@ class Main {
         const id: any = req.query.id;
         console.log("Id : ", id)
         kapanModel.aggregate([
+            {
+                $addFields: {
+                    cutsWeight: {
+                        $reduce: {
+                            input: "$cuts",
+                            initialValue: 0,
+                            in: { $add: ["$$this.weight", "$$value"] }
+                        }
+                    }
+                }
+            },
+            {
+                $project: { "cuts": 0 }
+            },
             {
                 $match: { id: parseInt(id) }
             },
@@ -560,7 +573,6 @@ class Main {
     }
 
     //Packets
-
     getPackets = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
@@ -724,7 +736,92 @@ class Main {
                         }
                     }
                 }
-            }
+            },
+            {
+                $project: {
+                    packets: {
+                        $map: {
+                            input: "$packet",
+                            as: "packet",
+                            in: {
+                                $mergeObjects: [
+                                    "$$packet",
+                                    {
+                                        subPacketsDetails: {
+                                            $reduce: {
+                                                input: "$$packet.subPackets",
+                                                initialValue: {
+                                                    totalWeightIn: 0,
+                                                    subReturnWeight: 0,
+                                                    subReturnPieces: 0,
+                                                    isAllReturn: true,
+                                                },
+                                                in: {
+                                                    totalWeightIn: {
+                                                        $add: [
+                                                            "$$value.totalWeightIn",
+                                                            "$$this.weight",
+                                                        ],
+                                                    },
+                                                    subReturnWeight: {
+                                                        $add: [
+                                                            "$$value.subReturnWeight",
+                                                            {
+                                                                $ifNull: [
+                                                                    "$$this.return.weight",
+                                                                    0,
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                    subReturnPieces: {
+                                                        $add: [
+                                                            "$$value.subReturnPieces",
+                                                            {
+                                                                $ifNull: [
+                                                                    "$$this.return.pieces",
+                                                                    0,
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                    isAllReturn: {
+                                                        $cond: {
+                                                            if: {
+                                                                $or: [
+                                                                    {
+                                                                        $eq: [
+                                                                            "$$this.return",
+                                                                            null,
+                                                                        ],
+                                                                    },
+                                                                    {
+                                                                        $eq: [
+                                                                            "$$this.return",
+                                                                            NaN,
+                                                                        ],
+                                                                    },
+                                                                ],
+                                                            },
+                                                            then: false,
+                                                            else: true,
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $project: {
+                    "packets.subPackets": 0
+                }
+            },
         ])
             .exec()
             .then((result: any) => {
@@ -794,7 +891,13 @@ class Main {
                     subReturn: null,
                     charni: req.body.charni,
                     cutting: req.body.cutting,
-                    color: req.body.color
+                    color: req.body.color,
+                    color2: req.body.color2,
+                    color3: req.body.color3,
+                    colorPieces1 : req.body.colorPieces1,
+                    colorPieces2 : req.body.colorPieces2,
+                    colorPieces3 : req.body.colorPieces3,
+
                 }
                 const filter = {
                     id: kapanId, // Replace with the actual document ID
@@ -879,6 +982,11 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].remarks`]: req.body.remarks,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].size`]: req.body.size,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].color`]: req.body.color,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].color2`]: req.body.color2,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].color3`]: req.body.color3,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces1`]: req.body.colorPieces1,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces2`]: req.body.colorPieces2,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces3`]: req.body.colorPieces3,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].cutting`]: req.body.cutting,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni`]: req.body.charni,
 
@@ -959,7 +1067,6 @@ class Main {
     }
 
     //Sub-Packets
-
     getSPackets = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -1162,6 +1269,7 @@ class Main {
                     size: req.body.size,
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
+                    mmvalue : req.body.mmvalue,
                     return: null,
                 }
                 const filter = {
@@ -1263,6 +1371,7 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].pieces`]: req.body.pieces,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].status`]: req.body.status,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].remarks`]: req.body.remarks,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].mmvalue`]: req.body.mmvalue,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].size`]: req.body.size,
             },
         };

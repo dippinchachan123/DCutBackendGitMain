@@ -19,7 +19,6 @@ dbConnect();
 
 // mainRouter.use("/auth", routers.authRouter);
 app.use('/api',mainRouter);
-app.use('/',appRouter)
 
 
 //Add 100 kapans to 

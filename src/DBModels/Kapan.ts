@@ -21,10 +21,21 @@ const packetSchema = new mongoose.Schema({
     type: { id: Number, value: String },
     default: null
   },
-  color: {
+  color : {
     type: { id: Number, value: String },
     default: null
   },
+  color2 : {
+    type: { id: Number, value: String },
+    default: null
+  },
+  color3 : {
+    type: { id: Number, value: String },
+    default: null
+  },
+  colorPieces1 : Number,
+  colorPieces2 : Number,
+  colorPieces3 : Number, 
   cutting: {  
     type: { id: Number, value: String },
     default: null
