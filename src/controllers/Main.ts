@@ -897,6 +897,8 @@ class Main {
                     colorPieces1 : req.body.colorPieces1,
                     colorPieces2 : req.body.colorPieces2,
                     colorPieces3 : req.body.colorPieces3,
+                    purityno : req.body.purityno,
+
 
                 }
                 const filter = {
@@ -989,6 +991,7 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces3`]: req.body.colorPieces3,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].cutting`]: req.body.cutting,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni`]: req.body.charni,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].purityno`]: req.body.purityno,
 
             },
         };

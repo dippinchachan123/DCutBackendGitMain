@@ -45,7 +45,8 @@ const packetSchema = new mongoose.Schema({
     default: 0
   },
   boil : mongoose.Schema.Types.Mixed,
-  laser : mongoose.Schema.Types.Mixed
+  laser : mongoose.Schema.Types.Mixed,
+  purityno : String
 });
 
 
