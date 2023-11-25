@@ -128,6 +128,30 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
+    updateKapanByField = (req: express.Request, res: express.Response) => {
+        const filter = { id: req.query.id };
+        const field = req.query.field.toString();
+
+        // Define the fields you want to update and their new values
+
+        const update = {
+            $set: {
+                [field] : req.body[field],
+            }
+        };
+        kapanModel.updateOne(filter, update, { new: true })
+            .then((result: any) => {
+                if (result.modifiedCount) {
+                    this.getKapanByID(req, res)
+                }
+                else {
+                    res.json({ err: false, data: result, notFound: true })
+                }
+            })
+            .catch((error) => {
+                res.status(500).json({ err: true, data: error })
+            });
+    }
     deleteKapan = (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         kapanModel.deleteOne(filter)

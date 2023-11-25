@@ -14,6 +14,8 @@ mainRouter.get("/getKapans",main.getKapans)
 mainRouter.post("/addKapan",main.addKapan)
 mainRouter.get("/getKapan",main.getKapanByID)
 mainRouter.post("/updateKapan",main.updateKapan)
+mainRouter.post("/updateKapanByField",main.updateKapanByField)
+
 mainRouter.post("/deleteKapan",main.deleteKapan)
 mainRouter.post("/deleteKapans",main.deleteAllKapans)
 mainRouter.post("/deleteKapans",main.deleteAllKapans)

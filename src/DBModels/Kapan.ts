@@ -1,4 +1,4 @@
-import { any, string } from 'joi';
+import { any, boolean, string } from 'joi';
 import mongoose from 'mongoose';
 
 const packetSchema = new mongoose.Schema({
@@ -113,6 +113,10 @@ const kapanSchema = new mongoose.Schema({
   size: Number,
   remarks: String,
   status: String,
+  lock : {
+    status : {type : Boolean,default : true},
+    lockedBy : mongoose.Schema.Types.Mixed
+  },
   createdAt: {
     type: Date,
     default: Date.now,
