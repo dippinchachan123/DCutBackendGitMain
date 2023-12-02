@@ -7,6 +7,8 @@ export const DATA_NOT_FOUND = "Data Not Found";
 export const DATA_NOT_SAVED = "Data Not saved!";
 export const DATA_ALL_READY = "Data already saved!";
 export const DATA_NOT_UPDATED = "Data Not Updated!!";
+export const DATA_ALREADY_EXISTS = "Data Aready Exists!!";
+
 
 export const ERROR_WHILE_FEATCHING_DATA = "Error While Featching Data";
 export const DATATYPE_SHOULD_BE_STRING = "Data Type Should Be String";

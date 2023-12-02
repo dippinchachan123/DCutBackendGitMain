@@ -2,12 +2,13 @@ import { randomUUID } from "crypto"
 import kapanModel from "../DBModels/Kapan"
 import StaffModel from "../DBModels/Staff"
 import express from 'express';
-import { DATA_FEATCHED, DATA_NOT_FOUND, DATA_NOT_SAVED, DATA_REMOVED_SUCCESSFULLY, DATA_SAVED, DATA_UPDATED, ERROR_WHILE_FEATCHING_DATA } from "../utils/constants/global.constants";
+import { DATA_ALREADY_EXISTS, DATA_FEATCHED, DATA_NOT_FOUND, DATA_NOT_SAVED, DATA_REMOVED_SUCCESSFULLY, DATA_SAVED, DATA_UPDATED, ERROR_WHILE_FEATCHING_DATA } from "../utils/constants/global.constants";
 import { PROCESS_IDS } from "../Data/Processes";
 import FieldsModel from "../DBModels/Fields";
 import { PRE_PROCESS_TYPES } from "../enums/processTypes";
 import UserModel from "../DBModels/Users";
 import bcrypt from "bcrypt";
+import { ERROR_WHILE_CREATING_LOGIN_DETAILS } from "../utils/constants/auth.constants";
 
 class Main {
     //Kapan
@@ -136,7 +137,7 @@ class Main {
 
         const update = {
             $set: {
-                [field] : req.body[field],
+                [field]: req.body[field],
             }
         };
         kapanModel.updateOne(filter, update, { new: true })
@@ -918,10 +919,10 @@ class Main {
                     color: req.body.color,
                     color2: req.body.color2,
                     color3: req.body.color3,
-                    colorPieces1 : req.body.colorPieces1,
-                    colorPieces2 : req.body.colorPieces2,
-                    colorPieces3 : req.body.colorPieces3,
-                    purityno : req.body.purityno,
+                    colorPieces1: req.body.colorPieces1,
+                    colorPieces2: req.body.colorPieces2,
+                    colorPieces3: req.body.colorPieces3,
+                    purityno: req.body.purityno,
 
 
                 }
@@ -1035,12 +1036,15 @@ class Main {
                 if (result.modifiedCount) {
                     res.json({ err: false, data: { id: req.query.id }, msg: DATA_UPDATED });
                 }
+                else if (result.matchedCount) {
+                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_ALREADY_EXISTS });
+                }
                 else {
                     res.json({ err: true, data: null, not: DATA_NOT_FOUND });
                 }
             })
             .catch((error) => {
-                console.log("bdibdk", error)
+                console.log("Error", error)
                 res.status(500).json({ err: true, data: error })
             });
     }
@@ -1296,7 +1300,7 @@ class Main {
                     size: req.body.size,
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
-                    mmvalue : req.body.mmvalue,
+                    mmvalue: req.body.mmvalue,
                     return: null,
                 }
                 const filter = {
@@ -1477,16 +1481,16 @@ class Main {
 
     //Staff
     getStaffs = (req: express.Request, res: express.Response) => {
-        const type : string = req.query.type?.toString();
-        if(type && ["Pre-Process","Post-Process"].includes(type)){
-            StaffModel.find({type : type})
-            .then((result: any) => {
-                res.json({ err: false, data: result })
-            })
-            .catch((error) => {
-                res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
-            });
-        }else{
+        const type: string = req.query.type?.toString();
+        if (type && ["Pre-Process", "Post-Process"].includes(type)) {
+            StaffModel.find({ type: type })
+                .then((result: any) => {
+                    res.json({ err: false, data: result })
+                })
+                .catch((error) => {
+                    res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
+                });
+        } else {
             StaffModel.find()
                 .then((result: any) => {
                     res.json({ err: false, data: result })
@@ -1528,7 +1532,7 @@ class Main {
                     name: req.body.name,
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
-                    type : req.body.type || "Pre-Process"
+                    type: req.body.type || "Pre-Process"
                 }
                 const Staff = new StaffModel(newStaff).save()
                     .then((savedStaff) => {
@@ -1634,8 +1638,8 @@ class Main {
                             status: req.body.status || "Active",
                             role: req.body.role,
                             password: hashedPassssword,
-                            staff : req.body.staff,
-                            nonStaff : req.body.nonStaff
+                            staff: req.body.staff,
+                            nonStaff: req.body.nonStaff
                         }
                         const User = new UserModel(newUser).save()
                             .then((savedUser) => {
@@ -1658,13 +1662,13 @@ class Main {
         // Define the fields you want to update and their new values
 
         const update: any = {
-            $set: { 
-                name: req.body.name, 
-                status: req.body.status, 
-                role: req.body.role, 
+            $set: {
+                name: req.body.name,
+                status: req.body.status,
+                role: req.body.role,
                 number: req.body.number,
-                staff : req.body.staff,
-                nonStaff : req.body.nonStaff
+                staff: req.body.staff,
+                nonStaff: req.body.nonStaff
             }
         };
 
@@ -1713,24 +1717,24 @@ class Main {
         UserModel.find({ number: number })
             .then((result: any) => {
                 if (result.length == 0) {
-                    res.json({ err: false, data: { valid : false, data: result },msg : "Number not found in user Database!!"})
+                    res.json({ err: false, data: { valid: false, data: result }, msg: "Number not found in user Database!!" })
                     return
                 }
                 bcrypt.compare(password, result[0].password)
-                .then(isPasswordmatch => {    
-                    if (isPasswordmatch && result[0].status == "Active") {
-                        res.json({ err: false, data: { valid : true, data: result },msg : "Login success!!"})
-                    }
-                    else {
-                        res.json({ err: false, data: { valid : false, data: result },msg : isPasswordmatch?"User InActive":"Invalid Password!!"})
-    
-                    }
-                })
-                .catch(err => {
-                    console.log(err)
-                    res.status(500).json({ err: true, data: err }); // Send a 500 response in case of an error
-                })
-                
+                    .then(isPasswordmatch => {
+                        if (isPasswordmatch && result[0].status == "Active") {
+                            res.json({ err: false, data: { valid: true, data: result }, msg: "Login success!!" })
+                        }
+                        else {
+                            res.json({ err: false, data: { valid: false, data: result }, msg: isPasswordmatch ? "User InActive" : "Invalid Password!!" })
+
+                        }
+                    })
+                    .catch(err => {
+                        console.log(err)
+                        res.status(500).json({ err: true, data: err }); // Send a 500 response in case of an error
+                    })
+
             })
             .catch((error) => {
                 console.log(error)
@@ -1743,17 +1747,17 @@ class Main {
         UserModel.find({ number: number })
             .then((result: any) => {
                 if (result.length == 0) {
-                    res.json({ err: false, data: { valid : false, data: result },msg : "Number not found in user Database!!"})
+                    res.json({ err: false, data: { valid: false, data: result }, msg: "Number not found in user Database!!" })
                     return
                 }
                 if (result[0].status == "Active") {
-                    res.json({ err: false, data: { valid : true, data: result },msg : "Authenticated!!"})
+                    res.json({ err: false, data: { valid: true, data: result }, msg: "Authenticated!!" })
                 }
                 else {
-                    res.json({ err: false, data: { valid : false, data: result },msg : "Invalid User"})
+                    res.json({ err: false, data: { valid: false, data: result }, msg: "Invalid User" })
 
                 }
-                })
+            })
             .catch((error) => {
                 console.log(error)
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
