@@ -133,16 +133,24 @@ class Main {
         const filter = { id: req.query.id };
         const field = req.query.field.toString();
 
-        // Define the fields you want to update and their new values
 
+        // Define the fields you want to update and their new values
         const update = {
             $set: {
                 [field]: req.body[field],
             }
         };
+
         kapanModel.updateOne(filter, update, { new: true })
             .then((result: any) => {
                 if (result.modifiedCount) {
+                    if(field == 'lock' && req.body.lock.status == false){
+                        const timerId = setInterval(()=>{
+                            kapanModel.updateOne(filter,{$set : {"lock" : {status : true}}},{new : true})
+                            clearInterval(timerId)
+                            console.log("Kapan Locked!!")
+                        },1000)
+                    }
                     this.getKapanByID(req, res)
                 }
                 else {
