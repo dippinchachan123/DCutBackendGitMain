@@ -29,4 +29,4 @@ app.use('/api',mainRouter);
 
 
 
-app.listen(4000,()=> console.log(`Server is running on http://127.0.0.1:${4000}`))
+app.listen(`4000`,()=> console.log(`Server is running on http://127.0.0.1:${4000}`))
