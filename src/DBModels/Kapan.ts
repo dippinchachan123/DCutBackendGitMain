@@ -21,22 +21,22 @@ const packetSchema = new mongoose.Schema({
     type: { id: Number, value: String },
     default: null
   },
-  color : {
+  color: {
     type: { id: Number, value: String },
     default: null
   },
-  color2 : {
+  color2: {
     type: { id: Number, value: String },
     default: null
   },
-  color3 : {
+  color3: {
     type: { id: Number, value: String },
     default: null
   },
-  colorPieces1 : Number,
-  colorPieces2 : Number,
-  colorPieces3 : Number, 
-  cutting: {  
+  colorPieces1: Number,
+  colorPieces2: Number,
+  colorPieces3: Number,
+  cutting: {
     type: { id: Number, value: String },
     default: null
   },
@@ -44,9 +44,17 @@ const packetSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  boil : mongoose.Schema.Types.Mixed,
-  laser : mongoose.Schema.Types.Mixed,
-  purityno : String
+  boil: mongoose.Schema.Types.Mixed,
+  laser: mongoose.Schema.Types.Mixed,
+  purityno: String,
+  created: {
+    time: { type: String, default: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}` },
+    user: mongoose.Schema.Types.Mixed
+  },
+  lastModified: {
+    time: { type: String, default: ''},
+    user: mongoose.Schema.Types.Mixed
+  }
 });
 
 
@@ -113,9 +121,9 @@ const kapanSchema = new mongoose.Schema({
   size: Number,
   remarks: String,
   status: String,
-  lock : {
-    status : {type : Boolean,default : true},
-    lockedBy : mongoose.Schema.Types.Mixed
+  lock: {
+    status: { type: Boolean, default: true },
+    lockedBy: mongoose.Schema.Types.Mixed
   },
   createdAt: {
     type: Date,

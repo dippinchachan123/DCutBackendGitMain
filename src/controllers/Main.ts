@@ -8,7 +8,6 @@ import FieldsModel from "../DBModels/Fields";
 import { PRE_PROCESS_TYPES } from "../enums/processTypes";
 import UserModel from "../DBModels/Users";
 import bcrypt from "bcrypt";
-import { ERROR_WHILE_CREATING_LOGIN_DETAILS } from "../utils/constants/auth.constants";
 
 class Main {
     //Kapan
@@ -140,16 +139,22 @@ class Main {
                 [field]: req.body[field],
             }
         };
+        console.log(update)
 
         kapanModel.updateOne(filter, update, { new: true })
             .then((result: any) => {
                 if (result.modifiedCount) {
                     if(field == 'lock' && req.body.lock.status == false){
                         const timerId = setInterval(()=>{
-                            kapanModel.updateOne(filter,{$set : {"lock" : {status : true}}},{new : true})
+                            kapanModel.updateOne(filter,{$set : {"lock" : {status : true}}})
+                            .then(res => {
+                                console.log(res,"Kapan Locked!!")
+                            })
+                            .catch(err => {
+                                console.log("Error in locking Kapan: ",err)
+                            })
                             clearInterval(timerId)
-                            console.log("Kapan Locked!!")
-                        },1000)
+                        },parseInt(process.env.Unlock_TIMER || "10000"))
                     }
                     this.getKapanByID(req, res)
                 }
@@ -397,7 +402,6 @@ class Main {
             })
 
     }
-
     //Carts
     getCarts = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -729,7 +733,6 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     getPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -865,7 +868,6 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     addPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
@@ -931,8 +933,10 @@ class Main {
                     colorPieces2: req.body.colorPieces2,
                     colorPieces3: req.body.colorPieces3,
                     purityno: req.body.purityno,
-
-
+                    created : {
+                        user : req.body.user,
+                        time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    }
                 }
                 const filter = {
                     id: kapanId, // Replace with the actual document ID
@@ -962,7 +966,6 @@ class Main {
             .catch(err => console.log(err))
 
     }
-
     deletePacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -994,7 +997,6 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     updatePacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -1008,6 +1010,9 @@ class Main {
         const filter = {
             id: kapanId, // Replace with the actual document ID
         }
+
+        console.log("Body : ",req.body)
+
 
         const update = {
             $set: {
@@ -1025,6 +1030,11 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].cutting`]: req.body.cutting,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni`]: req.body.charni,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].purityno`]: req.body.purityno,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                },
+
 
             },
         };
@@ -1056,7 +1066,6 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     updatePacketField = (req: any, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -1075,7 +1084,11 @@ class Main {
 
         const update = {
             $set: {
-                [`cuts.$[cut].carts.${process}.process.packets.$[packet].${field}`]: !isNaN(req.body[field]) ? parseFloat(req.body[field]) : req.body[field]
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].${field}`]: !isNaN(req.body[field]) ? parseFloat(req.body[field]) : req.body[field],
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                }
             }
         }
 
@@ -1164,7 +1177,6 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     getSPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -1235,7 +1247,6 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     addSPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -1310,6 +1321,10 @@ class Main {
                     status: req.body.status || "PENDING",
                     mmvalue: req.body.mmvalue,
                     return: null,
+                    created : {
+                        time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                        user : req.body.user
+                    }
                 }
                 const filter = {
                     id: kapanId, // Replace with the actual document ID
@@ -1344,7 +1359,6 @@ class Main {
             .catch(err => console.log(err))
 
     }
-
     deleteSPacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -1387,7 +1401,6 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     updateSPacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -1412,6 +1425,11 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].remarks`]: req.body.remarks,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].mmvalue`]: req.body.mmvalue,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].size`]: req.body.size,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                }
+
             },
         };
 
@@ -1459,7 +1477,11 @@ class Main {
 
         const update = {
             $set: {
-                [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].${field}`]: !isNaN(req.body[field.toString()]) ? parseFloat(req.body[field.toString()]) : req.body[field.toString()]
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].${field}`]: !isNaN(req.body[field.toString()]) ? parseFloat(req.body[field.toString()]) : req.body[field.toString()],
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                }
             },
         };
 
@@ -1540,7 +1562,9 @@ class Main {
                     name: req.body.name,
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
-                    type: req.body.type || "Pre-Process"
+                    type: req.body.type || "Pre-Process",
+                    number : req.body.number
+
                 }
                 const Staff = new StaffModel(newStaff).save()
                     .then((savedStaff) => {
@@ -1718,7 +1742,6 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     getUserStatus = async (req: express.Request, res: express.Response) => {
         const number = parseInt(req.query.number.toString());
         const password: string = req.query.password.toString()

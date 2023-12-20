@@ -34,7 +34,15 @@ const packetSchema = new mongoose.Schema({
     default: 0
   },
   boil : mongoose.Schema.Types.Mixed,
-  laser : mongoose.Schema.Types.Mixed
+  laser : mongoose.Schema.Types.Mixed,
+  created: {
+    time: { type: String, default: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}` },
+    user: mongoose.Schema.Types.Mixed
+  },
+  lastModified: {
+    time: { type: String, default: '' },
+    user: mongoose.Schema.Types.Mixed
+  }
 });
 
 
