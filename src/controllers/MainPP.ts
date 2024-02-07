@@ -1,19 +1,14 @@
 import { randomUUID } from "crypto"
-import kapanModelPP from "../DBModels/KapanPostProcess"
-import StaffModel from "../DBModels/Staff"
-
+import kapanModel from "../DBModels/KapanPostProcess"
 import express from 'express';
-import { DATA_FEATCHED, DATA_NOT_FOUND, DATA_NOT_SAVED, DATA_REMOVED_SUCCESSFULLY, DATA_SAVED, DATA_UPDATED, ERROR_WHILE_FEATCHING_DATA } from "../utils/constants/global.constants";
+import { DATA_ALREADY_EXISTS, DATA_FEATCHED, DATA_NOT_FOUND, DATA_NOT_SAVED, DATA_REMOVED_SUCCESSFULLY, DATA_SAVED, DATA_UPDATED, ERROR_WHILE_FEATCHING_DATA } from "../utils/constants/global.constants";
 import { PROCESS_IDS } from "../Data/Processes";
-import FieldsModel from "../DBModels/Fields";
 import { PRE_PROCESS_TYPES } from "../enums/processTypes";
-import UserModel from "../DBModels/Users";
-import bcrypt from "bcrypt";
 
 class Main {
     //Kapan
     getKapans = (req: express.Request, res: express.Response) => {
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             {
                 $addFields: {
                     cutsWeight: {
@@ -41,7 +36,21 @@ class Main {
     getKapanByID = (req: express.Request, res: express.Response) => {
         const id: any = req.query.id;
         console.log("Id : ", id)
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
+            {
+                $addFields: {
+                    cutsWeight: {
+                        $reduce: {
+                            input: "$cuts",
+                            initialValue: 0,
+                            in: { $add: ["$$this.weight", "$$value"] }
+                        }
+                    }
+                }
+            },
+            {
+                $project: { "cuts": 0 }
+            },
             {
                 $match: { id: parseInt(id) }
             },
@@ -60,7 +69,7 @@ class Main {
             })
     }
     addKapan = (req: express.Request, res: express.Response) => {
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             {
                 $group: {
                     _id: null, // Use null to group all documents together
@@ -81,7 +90,7 @@ class Main {
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
                 }
-                const kapan = new kapanModelPP(newKapan).save()
+                const kapan = new kapanModel(newKapan).save()
                     .then((savedKapan) => {
                         console.log('Kapan instance saved successfully:' + JSON.stringify(savedKapan));
                         res.json({ err: false, data: savedKapan });
@@ -102,7 +111,7 @@ class Main {
         const update = {
             $set: req.body
         };
-        kapanModelPP.updateOne(filter, update, { new: true })
+        kapanModel.updateOne(filter, update, { new: true })
             .then((result: any) => {
                 if (result.modifiedCount) {
                     this.getKapanByID(req, res)
@@ -115,9 +124,47 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
+    updateKapanByField = (req: express.Request, res: express.Response) => {
+        const filter = { id: req.query.id };
+        const field = req.query.field.toString();
+
+
+        // Define the fields you want to update and their new values
+        const update = {
+            $set: {
+                [field]: req.body[field],
+            }
+        };
+        console.log(update)
+
+        kapanModel.updateOne(filter, update, { new: true })
+            .then((result: any) => {
+                if (result.modifiedCount) {
+                    if(field == 'lock' && req.body.lock.status == false){
+                        const timerId = setInterval(()=>{
+                            kapanModel.updateOne(filter,{$set : {"lock" : {status : true}}})
+                            .then(res => {
+                                console.log(res,"Kapan Locked!!")
+                            })
+                            .catch(err => {
+                                console.log("Error in locking Kapan: ",err)
+                            })
+                            clearInterval(timerId)
+                        },parseInt(process.env.Unlock_TIMER || "10000"))
+                    }
+                    this.getKapanByID(req, res)
+                }
+                else {
+                    res.json({ err: false, data: result, notFound: true })
+                }
+            })
+            .catch((error) => {
+                res.status(500).json({ err: true, data: error })
+            });
+    }
     deleteKapan = (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
-        kapanModelPP.deleteOne(filter)
+        kapanModel.deleteOne(filter)
             .then((result: any) => {
                 console.log(result)
                 if (result.deletedCount) {
@@ -132,7 +179,7 @@ class Main {
             });
     }
     deleteAllKapans = (req: express.Request, res: express.Response) => {
-        kapanModelPP.deleteMany({})
+        kapanModel.deleteMany({})
             .then((result: any) => {
                 console.log(result)
                 if (result.deletedCount) {
@@ -150,7 +197,7 @@ class Main {
     //Cuts
     getCuts = (req: express.Request, res: express.Response) => {
 
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             {
                 $match: { id: parseInt(req.query.id.toString()) }
             },
@@ -174,7 +221,7 @@ class Main {
     getCutById = async (req: express.Request, res: express.Response) => {
         const id = parseInt(req.query.id.toString())
         const kapanId = parseInt(req.query.kapanId.toString())
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             {
                 $match: { id: kapanId },
             },
@@ -207,7 +254,7 @@ class Main {
         const id = parseInt(req.query.id.toString())
         const kapanId = parseInt(req.query.kapanId.toString())
         return new Promise((resolve, reject) => {
-            kapanModelPP.aggregate([
+            kapanModel.aggregate([
                 {
                     $match: { id: kapanId },
                 },
@@ -239,7 +286,7 @@ class Main {
     }
     addCut = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.id.toString())
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             {
                 $match: { id: kapanId }
             },
@@ -272,7 +319,7 @@ class Main {
                 }
                 const filter = { id: kapanId };
                 const update = { $push: { "cuts": newCut } };
-                const cut = kapanModelPP.updateOne(filter, update)
+                const cut = kapanModel.updateOne(filter, update)
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
@@ -293,7 +340,7 @@ class Main {
 
         const filter = { id: parseInt(req.query.kapanId.toString()) }; // Replace with the actual document _id
         const update = { $pull: { cuts: { id: parseInt(req.query.id.toString()) } } };
-        const cuts = kapanModelPP.updateOne(filter, update)
+        const cuts = kapanModel.updateOne(filter, update)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -328,7 +375,7 @@ class Main {
                     .then((result2: any) => {
                         console.log("Resul2 : ", result2)
                         if (!result2.err) {
-                            kapanModelPP.updateOne(filter, update)
+                            kapanModel.updateOne(filter, update)
                                 .then((result) => {
                                     if (result.modifiedCount) {
                                         res.json({ err: false, data: { id: req.query.id }, msg: DATA_UPDATED });
@@ -351,12 +398,11 @@ class Main {
             })
 
     }
-
     //Carts
     getCarts = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": id } },
@@ -560,12 +606,11 @@ class Main {
     }
 
     //Packets
-
     getPackets = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": id } },
@@ -684,13 +729,12 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     getPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
         const process = req.query.process;
         const id = parseInt(req.query.id.toString());
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": cutId } },
@@ -724,7 +768,92 @@ class Main {
                         }
                     }
                 }
-            }
+            },
+            {
+                $project: {
+                    packets: {
+                        $map: {
+                            input: "$packet",
+                            as: "packet",
+                            in: {
+                                $mergeObjects: [
+                                    "$$packet",
+                                    {
+                                        subPacketsDetails: {
+                                            $reduce: {
+                                                input: "$$packet.subPackets",
+                                                initialValue: {
+                                                    totalWeightIn: 0,
+                                                    subReturnWeight: 0,
+                                                    subReturnPieces: 0,
+                                                    isAllReturn: true,
+                                                },
+                                                in: {
+                                                    totalWeightIn: {
+                                                        $add: [
+                                                            "$$value.totalWeightIn",
+                                                            "$$this.weight",
+                                                        ],
+                                                    },
+                                                    subReturnWeight: {
+                                                        $add: [
+                                                            "$$value.subReturnWeight",
+                                                            {
+                                                                $ifNull: [
+                                                                    "$$this.return.weight",
+                                                                    0,
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                    subReturnPieces: {
+                                                        $add: [
+                                                            "$$value.subReturnPieces",
+                                                            {
+                                                                $ifNull: [
+                                                                    "$$this.return.pieces",
+                                                                    0,
+                                                                ],
+                                                            },
+                                                        ],
+                                                    },
+                                                    isAllReturn: {
+                                                        $cond: {
+                                                            if: {
+                                                                $or: [
+                                                                    {
+                                                                        $eq: [
+                                                                            "$$this.return",
+                                                                            null,
+                                                                        ],
+                                                                    },
+                                                                    {
+                                                                        $eq: [
+                                                                            "$$this.return",
+                                                                            NaN,
+                                                                        ],
+                                                                    },
+                                                                ],
+                                                            },
+                                                            then: false,
+                                                            else: true,
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $project: {
+                    "packets.subPackets": 0
+                }
+            },
         ])
             .exec()
             .then((result: any) => {
@@ -735,12 +864,11 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-
     addPacket = (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": id } },
@@ -781,7 +909,7 @@ class Main {
                 console.log(result)
                 const newPacket = {
                     diamondContainerId: "Packet-" + randomUUID(),
-                    packetId: `${kapanId}S${id}S${PROCESS_IDS[process.toString()]}S${(result[0]?.maxField || 0) + 1}SPP`,
+                    packetId: `${kapanId}S${id}S${PROCESS_IDS[process.toString()]}S${(result[0]?.maxField || 0) + 1}`,
                     id: (result[0]?.maxField || 0) + 1,
                     weight: req.body.weight,
                     pieces: req.body.pieces,
@@ -794,7 +922,17 @@ class Main {
                     subReturn: null,
                     charni: req.body.charni,
                     cutting: req.body.cutting,
-                    color: req.body.color
+                    color: req.body.color,
+                    color2: req.body.color2,
+                    color3: req.body.color3,
+                    colorPieces1: req.body.colorPieces1,
+                    colorPieces2: req.body.colorPieces2,
+                    colorPieces3: req.body.colorPieces3,
+                    purityno: req.body.purityno,
+                    created : {
+                        user : req.body.user,
+                        time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    }
                 }
                 const filter = {
                     id: kapanId, // Replace with the actual document ID
@@ -806,7 +944,7 @@ class Main {
                         [`cuts.$.carts.${process}.process.packets`]: newPacket, // Replace with the data you want to add
                     },
                 };
-                const cut = kapanModelPP.updateOne(filter, update)
+                const cut = kapanModel.updateOne(filter, update)
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
@@ -824,7 +962,6 @@ class Main {
             .catch(err => console.log(err))
 
     }
-
     deletePacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -842,7 +979,7 @@ class Main {
             },
         };
 
-        const cuts = kapanModelPP.updateOne(filter, update)
+        const cuts = kapanModel.updateOne(filter, update)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -856,7 +993,6 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     updatePacket = (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -871,6 +1007,9 @@ class Main {
             id: kapanId, // Replace with the actual document ID
         }
 
+        console.log("Body : ",req.body)
+
+
         const update = {
             $set: {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].weight`]: req.body.weight,
@@ -879,8 +1018,19 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].remarks`]: req.body.remarks,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].size`]: req.body.size,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].color`]: req.body.color,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].color2`]: req.body.color2,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].color3`]: req.body.color3,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces1`]: req.body.colorPieces1,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces2`]: req.body.colorPieces2,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces3`]: req.body.colorPieces3,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].cutting`]: req.body.cutting,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni`]: req.body.charni,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].purityno`]: req.body.purityno,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                },
+
 
             },
         };
@@ -894,22 +1044,24 @@ class Main {
 
         console.log(filter, update, options)
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
                     res.json({ err: false, data: { id: req.query.id }, msg: DATA_UPDATED });
+                }
+                else if (result.matchedCount) {
+                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_ALREADY_EXISTS });
                 }
                 else {
                     res.json({ err: true, data: null, not: DATA_NOT_FOUND });
                 }
             })
             .catch((error) => {
-                console.log("bdibdk", error)
+                console.log("Error", error)
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     updatePacketField = (req: any, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -928,7 +1080,11 @@ class Main {
 
         const update = {
             $set: {
-                [`cuts.$[cut].carts.${process}.process.packets.$[packet].${field}`]: !isNaN(req.body[field]) ? parseFloat(req.body[field]) : req.body[field]
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].${field}`]: !isNaN(req.body[field]) ? parseFloat(req.body[field]) : req.body[field],
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
+                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user : req.body.user
+                }
             }
         }
 
@@ -941,7 +1097,7 @@ class Main {
 
         console.log(filter, update, options, req.body)
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -965,7 +1121,7 @@ class Main {
         const cutId = parseInt(req.query.cutId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": cutId } },
@@ -1025,7 +1181,7 @@ class Main {
         const packetId = parseInt(req.query.packetId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": cutId } },
@@ -1095,7 +1251,7 @@ class Main {
         const cutId = parseInt(req.query.cutId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
-        kapanModelPP.aggregate([
+        kapanModel.aggregate([
             { $match: { id: kapanId } },
             { $unwind: "$cuts" },
             { $match: { "cuts.id": cutId } },
@@ -1179,7 +1335,7 @@ class Main {
                         { "packet.id": id },
                     ],
                 };
-                const cut = kapanModelPP.updateOne(filter, update, options)
+                const cut = kapanModel.updateOne(filter, update, options)
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
@@ -1226,7 +1382,7 @@ class Main {
             ]
         }
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -1276,7 +1432,7 @@ class Main {
         };
 
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 if (result.modifiedCount) {
                     res.json({ err: false, data: { id: req.query.id }, msg: DATA_UPDATED });
@@ -1324,7 +1480,7 @@ class Main {
         };
 
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 if (result.modifiedCount) {
                     res.json({ err: false, data: { id: req.query.id }, msg: DATA_UPDATED });
@@ -1374,7 +1530,7 @@ class Main {
 
         console.log(filter, update, options)
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -1406,7 +1562,7 @@ class Main {
             ],
         };
 
-        return kapanModelPP.updateOne(filter, update, options)
+        return kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
@@ -1450,7 +1606,7 @@ class Main {
 
         console.log(filter, update, options)
 
-        const cuts = kapanModelPP.updateOne(filter, update, options)
+        const cuts = kapanModel.updateOne(filter, update, options)
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {

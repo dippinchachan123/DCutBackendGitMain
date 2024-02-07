@@ -8,10 +8,12 @@ import FieldsModel from "../DBModels/Fields";
 import { PRE_PROCESS_TYPES } from "../enums/processTypes";
 import UserModel from "../DBModels/Users";
 import bcrypt from "bcrypt";
+import { Global } from "./Global";
+import { DataType, Operation } from "../enums/Logs";
 
 class Main {
     //Kapan
-    getKapans = (req: express.Request, res: express.Response) => {
+    getKapans = async (req: express.Request, res: express.Response) => {
         kapanModel.aggregate([
             {
                 $addFields: {
@@ -37,7 +39,8 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    getKapanByID = (req: express.Request, res: express.Response) => {
+
+    getKapanByID = async (req: express.Request, res: express.Response) => {
         const id: any = req.query.id;
         console.log("Id : ", id)
         kapanModel.aggregate([
@@ -72,7 +75,8 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    addKapan = (req: express.Request, res: express.Response) => {
+
+    addKapan = async (req: express.Request, res: express.Response) => {
         kapanModel.aggregate([
             {
                 $group: {
@@ -98,6 +102,19 @@ class Main {
                     .then((savedKapan) => {
                         console.log('Kapan instance saved successfully:' + JSON.stringify(savedKapan));
                         res.json({ err: false, data: savedKapan });
+                        Global.addLog({
+                            user: req.body.user,
+                            operation: Operation.A,
+                            dataType: DataType.K,
+                            path: `/kapans?id=${newKapan.id}`,
+                            data: { remarks: "Kapan Added", name: newKapan.name, weight: newKapan.weight, pieces: newKapan.pieces }
+                        })
+                            .then(logResponse => {
+                                console.log("Log Added!!")
+                            })
+                            .catch(err => {
+                                console.log("Error in Adding Log!!")
+                            })
                     })
                     .catch((error) => {
                         console.log("Error : ", error)
@@ -107,7 +124,8 @@ class Main {
             )
             .catch(err => console.log(err))
     }
-    updateKapan = (req: express.Request, res: express.Response) => {
+
+    updateKapan = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
 
         // Define the fields you want to update and their new values
@@ -119,6 +137,23 @@ class Main {
             .then((result: any) => {
                 if (result.modifiedCount) {
                     this.getKapanByID(req, res)
+                    Global.addLog({
+                        user: req.body.user,
+                        operation: Operation.U,
+                        dataType: DataType.K,
+                        path: `/kapans?id=${filter.id}`,
+                        data: {
+                            old: { id: filter.id, name: req.body.name, weight: null, pieces: null },
+                            new: { remarks: "Kapan Updated", id: filter.id, name: req.body.name, weight: req.body.weight, pieces: req.body.pieces }
+                        }
+                    })
+                        .then(logResponse => {
+                            console.log("Log Added!!")
+                        })
+                        .catch(err => {
+                            console.log("Error in Adding Log!!")
+                        })
+
                 }
                 else {
                     res.json({ err: false, data: result, notFound: true })
@@ -128,7 +163,8 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    updateKapanByField = (req: express.Request, res: express.Response) => {
+
+    updateKapanByField = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         const field = req.query.field.toString();
 
@@ -144,17 +180,30 @@ class Main {
         kapanModel.updateOne(filter, update, { new: true })
             .then((result: any) => {
                 if (result.modifiedCount) {
-                    if(field == 'lock' && req.body.lock.status == false){
-                        const timerId = setInterval(()=>{
-                            kapanModel.updateOne(filter,{$set : {"lock" : {status : true}}})
-                            .then(res => {
-                                console.log(res,"Kapan Locked!!")
-                            })
-                            .catch(err => {
-                                console.log("Error in locking Kapan: ",err)
-                            })
+                    Global.addLog({
+                        user: req.body.user,
+                        operation: field == 'lock' ? Operation.UL : Operation.U,
+                        dataType: DataType.K,
+                        path: `/kapans?id=${filter.id}`,
+                        data: { remarks: "Kapan Un-locked", id: filter.id, name: req.body.name, weight: req.body.weight, pieces: req.body.pieces }
+                    })
+                        .then(logResponse => {
+                            console.log("Log Added!!")
+                        })
+                        .catch(err => {
+                            console.log("Error in Adding Log!!")
+                        })
+                    if (field == 'lock' && req.body.lock.status == false) {
+                        const timerId = setInterval(() => {
+                            kapanModel.updateOne(filter, { $set: { "lock": { status: true } } })
+                                .then(res => {
+                                    console.log(res, "Kapan Locked!!")
+                                })
+                                .catch(err => {
+                                    console.log("Error in locking Kapan: ", err)
+                                })
                             clearInterval(timerId)
-                        },parseInt(process.env.Unlock_TIMER || "10000"))
+                        }, parseInt(process.env.Unlock_TIMER || "86400000"))
                     }
                     this.getKapanByID(req, res)
                 }
@@ -166,28 +215,30 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    deleteKapan = (req: express.Request, res: express.Response) => {
+
+    deleteKapan = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         kapanModel.deleteOne(filter)
             .then((result: any) => {
                 console.log(result)
                 if (result.deletedCount) {
                     res.json({ err: false, data: result })
-                }
-                else {
-                    res.json({ err: false, data: result, notFound: true })
-                }
-            })
-            .catch((error) => {
-                res.status(500).json({ err: true, data: error })
-            });
-    }
-    deleteAllKapans = (req: express.Request, res: express.Response) => {
-        kapanModel.deleteMany({})
-            .then((result: any) => {
-                console.log(result)
-                if (result.deletedCount) {
-                    res.json({ err: false, data: result })
+                    Global.addLog({
+                        user: req.body.user,
+                        operation: Operation.D,
+                        dataType: DataType.K,
+                        path: `/kapans?id=${filter.id}`,
+                        data: {
+                            remarks: "Kapan Deleted",
+                            id: filter.id
+                        }
+                    })
+                        .then(logResponse => {
+                            console.log("Log Added!!")
+                        })
+                        .catch(err => {
+                            console.log("Error in Adding Log!!")
+                        })
                 }
                 else {
                     res.json({ err: false, data: result, notFound: true })
@@ -198,8 +249,40 @@ class Main {
             });
     }
 
+    deleteAllKapans = async (req: express.Request, res: express.Response) => {
+        kapanModel.deleteMany({})
+            .then((result: any) => {
+                console.log(result)
+                if (result.deletedCount) {
+                    res.json({ err: false, data: result })
+                    Global.addLog({
+                        user: req.body.user,
+                        operation: Operation.D,
+                        dataType: DataType.K,
+                        path: `/kapans`,
+                        data: {
+                            remarks: "All Kapans Deleted",
+                        }
+                    })
+                        .then(logResponse => {
+                            console.log("Log Added!!")
+                        })
+                        .catch(err => {
+                            console.log("Error in Adding Log!!")
+                        })
+                }
+                else {
+                    res.json({ err: false, data: result, notFound: true })
+                }
+            })
+            .catch((error) => {
+                res.status(500).json({ err: true, data: error })
+            });
+    }
+    
     //Cuts
-    getCuts = (req: express.Request, res: express.Response) => {
+    
+    getCuts = async (req: express.Request, res: express.Response) => {
 
         kapanModel.aggregate([
             {
@@ -222,6 +305,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
+
     getCutById = async (req: express.Request, res: express.Response) => {
         const id = parseInt(req.query.id.toString())
         const kapanId = parseInt(req.query.kapanId.toString())
@@ -254,6 +338,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
+
     getCutByIdUseIn = async (req: express.Request, res: express.Response) => {
         const id = parseInt(req.query.id.toString())
         const kapanId = parseInt(req.query.kapanId.toString())
@@ -288,7 +373,8 @@ class Main {
                 })
         })
     }
-    addCut = (req: express.Request, res: express.Response) => {
+
+    addCut = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.id.toString())
         kapanModel.aggregate([
             {
@@ -327,6 +413,19 @@ class Main {
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
+                            Global.addLog({
+                                user: req.body.user,
+                                operation: Operation.A,
+                                dataType: DataType.C,
+                                path: `/kapans/${kapanId}?id=${newCut.id}`,
+                                data: { remarks: "Cut Added", weight: newCut.weight, pieces: newCut.pieces }
+                            })
+                                .then(logResponse => {
+                                    console.log("Log Added!!")
+                                })
+                                .catch(err => {
+                                    console.log("Error in Adding Log!!")
+                                })
                         }
                         else {
 
@@ -340,7 +439,8 @@ class Main {
             })
             .catch(err => console.log(err))
     }
-    deleteCut = (req: express.Request, res: express.Response) => {
+
+    deleteCut = async (req: express.Request, res: express.Response) => {
 
         const filter = { id: parseInt(req.query.kapanId.toString()) }; // Replace with the actual document _id
         const update = { $pull: { cuts: { id: parseInt(req.query.id.toString()) } } };
@@ -358,6 +458,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
+
     updateCut = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString())
         const id = parseInt(req.query.id.toString())
@@ -371,6 +472,8 @@ class Main {
                 "cuts.$.remarks": req.body.remarks,
             }
         };
+
+        
         this.getCutByIdUseIn(req, res)
             .then((result1: any) => {
                 console.log("Resul1 : ", result1)
@@ -403,7 +506,7 @@ class Main {
 
     }
     //Carts
-    getCarts = (req: express.Request, res: express.Response) => {
+    getCarts = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
         kapanModel.aggregate([
@@ -610,7 +713,7 @@ class Main {
     }
 
     //Packets
-    getPackets = (req: express.Request, res: express.Response) => {
+    getPackets = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
@@ -733,7 +836,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    getPacket = (req: express.Request, res: express.Response) => {
+    getPacket = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
         const process = req.query.process;
@@ -868,7 +971,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    addPacket = (req: express.Request, res: express.Response) => {
+    addPacket = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const id = parseInt(req.query.id.toString());
         const process = req.query.process;
@@ -925,6 +1028,8 @@ class Main {
                     subPackets: [],
                     subReturn: null,
                     charni: req.body.charni,
+                    charni2: req.body.charni2,
+                    charni3: req.body.charni3,
                     cutting: req.body.cutting,
                     color: req.body.color,
                     color2: req.body.color2,
@@ -933,9 +1038,9 @@ class Main {
                     colorPieces2: req.body.colorPieces2,
                     colorPieces3: req.body.colorPieces3,
                     purityno: req.body.purityno,
-                    created : {
-                        user : req.body.user,
-                        time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    created: {
+                        user: req.body.user,
+                        time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
                     }
                 }
                 const filter = {
@@ -952,6 +1057,20 @@ class Main {
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
+                            Global.addLog({
+                                user: req.body.user,
+                                operation: Operation.A,
+                                dataType: DataType.P,
+                                path: `/cart/${kapanId}-${id}-${process}?id=${result[0].maxField + 1}`,
+                                data: { remarks: "Packet Added", weight: null, pieces: null }
+                            })
+                                .then(logResponse => {
+                                    console.log("Log Added!!")
+                                })
+                                .catch(err => {
+                                    console.log("Error in Adding Log!!")
+                                })
+
                         }
                         else {
 
@@ -966,7 +1085,7 @@ class Main {
             .catch(err => console.log(err))
 
     }
-    deletePacket = (req: express.Request, res: express.Response) => {
+    deletePacket = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -997,7 +1116,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    updatePacket = (req: express.Request, res: express.Response) => {
+    updatePacket = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
 
@@ -1011,7 +1130,7 @@ class Main {
             id: kapanId, // Replace with the actual document ID
         }
 
-        console.log("Body : ",req.body)
+        console.log("Body : ", req.body)
 
 
         const update = {
@@ -1029,14 +1148,16 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].colorPieces3`]: req.body.colorPieces3,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].cutting`]: req.body.cutting,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni`]: req.body.charni,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni2`]: req.body.charni2,
+                [`cuts.$[cut].carts.${process}.process.packets.$[packet].charni3`]: req.body.charni3,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].purityno`]: req.body.purityno,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
-                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
-                    user : req.body.user
+                    time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user: req.body.user
                 },
 
 
-            },
+            }
         };
 
         const options = {
@@ -1066,7 +1187,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    updatePacketField = (req: any, res: express.Response) => {
+    updatePacketField = async (req: any, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
 
@@ -1086,8 +1207,8 @@ class Main {
             $set: {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].${field}`]: !isNaN(req.body[field]) ? parseFloat(req.body[field]) : req.body[field],
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].lastModified`]: {
-                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
-                    user : req.body.user
+                    time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user: req.body.user
                 }
             }
         }
@@ -1119,7 +1240,7 @@ class Main {
     }
 
     //Sub-Packets
-    getSPackets = (req: express.Request, res: express.Response) => {
+    getSPackets = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
         const id = parseInt(req.query.id.toString());
@@ -1177,7 +1298,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    getSPacket = (req: express.Request, res: express.Response) => {
+    getSPacket = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
         const packetId = parseInt(req.query.packetId.toString());
@@ -1247,7 +1368,7 @@ class Main {
                 res.json({ err: true, data: err, msg: ERROR_WHILE_FEATCHING_DATA });
             })
     }
-    addSPacket = (req: express.Request, res: express.Response) => {
+    addSPacket = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
         const id = parseInt(req.query.id.toString());
@@ -1321,9 +1442,9 @@ class Main {
                     status: req.body.status || "PENDING",
                     mmvalue: req.body.mmvalue,
                     return: null,
-                    created : {
-                        time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
-                        user : req.body.user
+                    created: {
+                        time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                        user: req.body.user
                     }
                 }
                 const filter = {
@@ -1345,6 +1466,19 @@ class Main {
                     .then((result2) => {
                         if (result2.modifiedCount) {
                             res.json({ err: false, data: { id: result[0].maxField + 1 }, msg: DATA_SAVED });
+                            Global.addLog({
+                                user: req.body.user,
+                                operation: Operation.A,
+                                dataType: DataType.SP,
+                                path: `/Packet/${kapanId}-${cutId}-${"LASER_LOTING"}-${id}?id=${result[0].maxField + 1}`,
+                                data: { remarks: "Packet Added", weight: null, pieces: null }
+                            })
+                                .then(logResponse => {
+                                    console.log("Log Added!!")
+                                })
+                                .catch(err => {
+                                    console.log("Error in Adding Log!!")
+                                })
                         }
                         else {
 
@@ -1359,7 +1493,7 @@ class Main {
             .catch(err => console.log(err))
 
     }
-    deleteSPacket = (req: express.Request, res: express.Response) => {
+    deleteSPacket = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -1391,8 +1525,22 @@ class Main {
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
-                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_REMOVED_SUCCESSFULLY });
+                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_REMOVED_SUCCESSFULLY});
+                    Global.addLog({
+                        user: req.body.user,
+                        operation: Operation.A,
+                        dataType: DataType.SP,
+                        path: `/Packet/${kapanId}-${cutId}-${"LASER_LOTING"}-${id}?id=${result[0].maxField + 1}`,
+                        data: { remarks: "Packet Added", weight: null, pieces: null }
+                    })
+                        .then(logResponse => {
+                            console.log("Log Added!!")
+                        })
+                        .catch(err => {
+                            console.log("Error in Adding Log!!")
+                        })
                 }
+                
                 else {
                     res.json({ err: true, data: null, not: DATA_NOT_FOUND });
                 }
@@ -1401,7 +1549,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    updateSPacket = (req: express.Request, res: express.Response) => {
+    updateSPacket = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
 
@@ -1426,8 +1574,8 @@ class Main {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].mmvalue`]: req.body.mmvalue,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].size`]: req.body.size,
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].lastModified`]: {
-                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
-                    user : req.body.user
+                    time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user: req.body.user
                 }
 
             },
@@ -1456,7 +1604,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    updateSPacketField = (req: express.Request, res: express.Response) => {
+    updateSPacketField = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
 
@@ -1479,8 +1627,8 @@ class Main {
             $set: {
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].${field}`]: !isNaN(req.body[field.toString()]) ? parseFloat(req.body[field.toString()]) : req.body[field.toString()],
                 [`cuts.$[cut].carts.${process}.process.packets.$[packet].subPackets.$[sPacket].lastModified`]: {
-                    time : `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
-                    user : req.body.user
+                    time: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}`,
+                    user: req.body.user
                 }
             },
         };
@@ -1510,7 +1658,7 @@ class Main {
     }
 
     //Staff
-    getStaffs = (req: express.Request, res: express.Response) => {
+    getStaffs = async (req: express.Request, res: express.Response) => {
         const type: string = req.query.type?.toString();
         if (type && ["Pre-Process", "Post-Process"].includes(type)) {
             StaffModel.find({ type: type })
@@ -1530,7 +1678,7 @@ class Main {
                 });
         }
     }
-    getStaffByID = (req: express.Request, res: express.Response) => {
+    getStaffByID = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         StaffModel.findOne(filter)
             .then((result: any) => {
@@ -1546,7 +1694,7 @@ class Main {
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
             });
     }
-    addStaff = (req: express.Request, res: express.Response) => {
+    addStaff = async (req: express.Request, res: express.Response) => {
         StaffModel.aggregate([
             {
                 $group: {
@@ -1563,13 +1711,27 @@ class Main {
                     remarks: req.body.remarks,
                     status: req.body.status || "PENDING",
                     type: req.body.type || "Pre-Process",
-                    number : req.body.number
+                    number: req.body.number
 
                 }
                 const Staff = new StaffModel(newStaff).save()
                     .then((savedStaff) => {
                         console.log('Staff instance saved successfully:' + JSON.stringify(savedStaff));
                         res.json({ err: false, data: savedStaff });
+                        // Global.addLog({
+                        //     user: req.body.user,
+                        //     operation: Operation.A,
+                        //     dataType: DataType.S,
+                        //     path: `/cart/${kapanId}-${id}-${process}?id=${result[0].maxField + 1}`,
+                        //     data: { remarks: "Packet Added", weight: null, pieces: null }
+                        // })
+                        //     .then(logResponse => {
+                        //         console.log("Log Added!!")
+                        //     })
+                        //     .catch(err => {
+                        //         console.log("Error in Adding Log!!")
+                        //     })
+
                     })
                     .catch((error) => {
                         res.status(500).json({ err: true, data: error })
@@ -1578,7 +1740,7 @@ class Main {
             )
             .catch(err => console.log(err))
     }
-    updateStaff = (req: express.Request, res: express.Response) => {
+    updateStaff = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
 
         // Define the fields you want to update and their new values
@@ -1605,7 +1767,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    deleteStaff = (req: express.Request, res: express.Response) => {
+    deleteStaff = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         StaffModel.deleteOne(filter)
             .then((result: any) => {
@@ -1621,9 +1783,9 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
+    
     //User
-    getUsers = (req: express.Request, res: express.Response) => {
+    getUsers = async (req: express.Request, res: express.Response) => {
         UserModel.find()
             .then((result: any) => {
                 res.json({ err: false, data: result })
@@ -1632,7 +1794,7 @@ class Main {
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
             });
     }
-    getUserByID = (req: express.Request, res: express.Response) => {
+    getUserByID = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         UserModel.findOne(filter)
             .then((result: any) => {
@@ -1648,7 +1810,7 @@ class Main {
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
             });
     }
-    addUser = (req: express.Request, res: express.Response) => {
+    addUser = async (req: express.Request, res: express.Response) => {
         bcrypt.hash(req.body.password, 10)
             .then(hashedPassssword => {
                 UserModel.aggregate([
@@ -1688,7 +1850,7 @@ class Main {
             })
             .catch(err => console.log(err))
     }
-    updateUser = (req: express.Request, res: express.Response) => {
+    updateUser = async (req: express.Request, res: express.Response) => {
         const filter = { id: parseInt(req.query.id.toString()) };
 
         // Define the fields you want to update and their new values
@@ -1726,7 +1888,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    deleteUser = (req: express.Request, res: express.Response) => {
+    deleteUser = async (req: express.Request, res: express.Response) => {
         const filter = { id: req.query.id };
         UserModel.deleteOne(filter)
             .then((result: any) => {
@@ -1772,7 +1934,6 @@ class Main {
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
             });
     }
-
     getUserStatusByNumber = async (req: express.Request, res: express.Response) => {
         const number = parseInt(req.query.number.toString());
         UserModel.find({ number: number })
@@ -1796,7 +1957,7 @@ class Main {
     }
 
     //Fields
-    getFields = (req: express.Request, res: express.Response) => {
+    getFields = async (req: express.Request, res: express.Response) => {
         FieldsModel.find()
             .then((result: any) => {
                 res.json({ err: false, data: result })
@@ -1805,7 +1966,7 @@ class Main {
                 res.status(500).json({ err: true, data: error }); // Send a 500 response in case of an error
             });
     }
-    addField = (req: express.Request, res: express.Response) => {
+    addField = async (req: express.Request, res: express.Response) => {
         FieldsModel.find()
             .then((result: any) => {
                 if (result.length == 0) {
@@ -1877,7 +2038,7 @@ class Main {
             });
 
     }
-    deleteField = (req: express.Request, res: express.Response) => {
+    deleteField = async (req: express.Request, res: express.Response) => {
         const filter = { id: "Kapan" };
         const update = { $pull: { [req.query.key.toString()]: { id: parseInt(req.query.id.toString()) } } }
         FieldsModel.updateOne(filter, update)
@@ -1893,9 +2054,8 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-
     //Cart weight transfer
-    weightTransfer = (req: express.Request, res: express.Response) => {
+    weightTransfer = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
         const cutId = parseInt(req.query.cutId.toString());
@@ -1975,7 +2135,7 @@ class Main {
                 console.log("Error : ", error)
             });
     }
-    ReturnMainPacket = (req: express.Request, res: express.Response) => {
+    ReturnMainPacket = async (req: express.Request, res: express.Response) => {
 
         const kapanId = parseInt(req.query.kapanId.toString());
 

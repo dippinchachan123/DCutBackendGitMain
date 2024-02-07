@@ -1,4 +1,4 @@
-import { any, string } from 'joi';
+import { any, boolean, string } from 'joi';
 import mongoose from 'mongoose';
 
 const packetSchema = new mongoose.Schema({
@@ -25,7 +25,18 @@ const packetSchema = new mongoose.Schema({
     type: { id: Number, value: String },
     default: null
   },
-  cutting: {  
+  color2: {
+    type: { id: Number, value: String },
+    default: null
+  },
+  color3: {
+    type: { id: Number, value: String },
+    default: null
+  },
+  colorPieces1: Number,
+  colorPieces2: Number,
+  colorPieces3: Number,
+  cutting: {
     type: { id: Number, value: String },
     default: null
   },
@@ -33,14 +44,15 @@ const packetSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  boil : mongoose.Schema.Types.Mixed,
-  laser : mongoose.Schema.Types.Mixed,
+  boil: mongoose.Schema.Types.Mixed,
+  laser: mongoose.Schema.Types.Mixed,
+  purityno: String,
   created: {
     time: { type: String, default: `${new Date().toLocaleTimeString()}-${new Date().toLocaleDateString()}` },
     user: mongoose.Schema.Types.Mixed
   },
   lastModified: {
-    time: { type: String, default: '' },
+    time: { type: String, default: ''},
     user: mongoose.Schema.Types.Mixed
   }
 });
@@ -109,6 +121,10 @@ const kapanSchema = new mongoose.Schema({
   size: Number,
   remarks: String,
   status: String,
+  lock: {
+    status: { type: Boolean, default: false },
+    lockedBy: mongoose.Schema.Types.Mixed
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -131,7 +147,7 @@ const kapanSchema = new mongoose.Schema({
 
 
 // Create the Mongoose model for Kapan
-const KapanPP = mongoose.model('KapanPostProcess', kapanSchema);
+const KapanPP = mongoose.model('KapanPP', kapanSchema);
 
 
 export default KapanPP;

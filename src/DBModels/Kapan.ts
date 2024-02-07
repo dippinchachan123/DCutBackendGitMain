@@ -21,6 +21,14 @@ const packetSchema = new mongoose.Schema({
     type: { id: Number, value: String },
     default: null
   },
+  charni2: {
+    type: { id: Number, value: String },
+    default: null
+  },
+  charni3: {
+    type: { id: Number, value: String },
+    default: null
+  },
   color: {
     type: { id: Number, value: String },
     default: null
@@ -122,7 +130,7 @@ const kapanSchema = new mongoose.Schema({
   remarks: String,
   status: String,
   lock: {
-    status: { type: Boolean, default: true },
+    status: { type: Boolean, default: false },
     lockedBy: mongoose.Schema.Types.Mixed
   },
   createdAt: {

@@ -88,7 +88,8 @@ mainRouter.get("/PPgetKapan",mainPP.getKapanByID)
 mainRouter.post("/PPupdateKapan",mainPP.updateKapan)
 mainRouter.post("/PPdeleteKapan",mainPP.deleteKapan)
 mainRouter.post("/PPdeleteKapans",mainPP.deleteAllKapans)
-mainRouter.post("/PPdeleteKapans",mainPP.deleteAllKapans)
+mainRouter.post("/PPupdateKapanByField",mainPP.updateKapanByField)
+
 
 //PPCuts
 mainRouter.get("/PPgetCuts",mainPP.getCuts)
