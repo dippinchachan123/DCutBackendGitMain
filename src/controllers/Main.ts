@@ -1784,7 +1784,7 @@ class Main {
             });
     }
     
-    //User
+    //User      
     getUsers = async (req: express.Request, res: express.Response) => {
         UserModel.find()
             .then((result: any) => {
