@@ -279,9 +279,8 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    
+
     //Cuts
-    
     getCuts = async (req: express.Request, res: express.Response) => {
 
         kapanModel.aggregate([
@@ -473,7 +472,7 @@ class Main {
             }
         };
 
-        
+
         this.getCutByIdUseIn(req, res)
             .then((result1: any) => {
                 console.log("Resul1 : ", result1)
@@ -505,6 +504,7 @@ class Main {
             })
 
     }
+    
     //Carts
     getCarts = async (req: express.Request, res: express.Response) => {
         const kapanId = parseInt(req.query.kapanId.toString());
@@ -578,7 +578,7 @@ class Main {
                                             "$$value.totalReturnWeights.MARKING_LOTING",
                                             {
                                                 $ifNull: [
-                                                    "$$this.return.weights.MARKING_LOTING.weights.weight",
+                                                    "$$this.return.weights.MARKING_LOTING.weight",
                                                     0,
                                                 ],
                                             },
@@ -1525,7 +1525,7 @@ class Main {
             .then((result) => {
                 console.log("Result : ", result, filter, update)
                 if (result.modifiedCount) {
-                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_REMOVED_SUCCESSFULLY});
+                    res.json({ err: false, data: { id: req.query.id }, msg: DATA_REMOVED_SUCCESSFULLY });
                     Global.addLog({
                         user: req.body.user,
                         operation: Operation.A,
@@ -1540,7 +1540,7 @@ class Main {
                             console.log("Error in Adding Log!!")
                         })
                 }
-                
+
                 else {
                     res.json({ err: true, data: null, not: DATA_NOT_FOUND });
                 }
@@ -1783,7 +1783,7 @@ class Main {
                 res.status(500).json({ err: true, data: error })
             });
     }
-    
+
     //User      
     getUsers = async (req: express.Request, res: express.Response) => {
         UserModel.find()
